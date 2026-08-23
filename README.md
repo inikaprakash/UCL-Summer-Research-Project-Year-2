@@ -1,250 +1,444 @@
 # UCL Summer Research Project — Year 2
 
-## Mathematical study of option pricing: Black–Scholes, Monte Carlo and machine learning
+## Option Pricing through Probability, Stochastic Calculus, Numerical Methods and Machine Learning
 
-This repository contains the computational work for a UCL Year 2/3 Mathematics summer research project on **European option pricing**. The central question is not simply which model gives the smallest prediction error, but:
+I use this project to study option pricing by starting with the mathematics and then asking how different computational methods reproduce it.
 
-> **How much of the mathematical structure of option pricing can be recovered, approximated, or replaced by data-driven models?**
-
-The project compares classical mathematical finance with four supervised-learning approaches, using both **synthetic data generated from the Black–Scholes model** and **real option-chain data**.
-
-The mathematical progression is
+The central object is the pricing function
 
 \[
-\text{stochastic model}
-\;\longrightarrow\;
-\text{closed-form pricing}
-\;\longrightarrow\;
-\text{Monte Carlo approximation}
-\;\longrightarrow\;
-\text{non-parametric ML approximation}
-\;\longrightarrow\;
-\text{out-of-sample evaluation}.
+V=V(S,K,T,r,\sigma),
+\]
+
+where \(S\) is the underlying price, \(K\) the strike, \(T\) the time to maturity, \(r\) the continuously compounded risk-free rate and \(\sigma\) the volatility.
+
+For a European call and put, the terminal payoffs are
+
+\[
+C_T=(S_T-K)^+,
+\qquad
+P_T=(K-S_T)^+.
+\]
+
+The computational question is therefore a function-approximation problem, but the function being approximated has a rich mathematical structure. I want to understand where that structure comes from before comparing algorithms that attempt to learn it.
+
+The project follows the chain
+
+\[
+\boxed{
+\text{SDE}
+\rightarrow
+\text{Itô calculus}
+\rightarrow
+\text{risk-neutral valuation}
+\rightarrow
+\text{Black--Scholes PDE/formula}
+\rightarrow
+\text{Monte Carlo}
+\rightarrow
+\text{machine-learning approximation}
+}
 \]
 
 ---
 
-## 1. Problem formulation
+## 1. The pricing problem
 
-For a European option with current underlying price \(S\), strike \(K\), time to maturity \(T\), continuously compounded risk-free rate \(r\), and volatility \(\sigma\), the project studies the pricing map
-
-\[
-(S,K,T,r,\sigma,\text{option type})\mapsto V.
-\]
-
-For a call, the payoff at maturity is
+For a European option, I can regard pricing as a map
 
 \[
-C_T=(S_T-K)^+=\max(S_T-K,0),
+f:(S,K,T,r,\sigma)\mapsto V.
 \]
 
-while for a put
+The important point is that this is not an arbitrary multivariable function. Under the Black--Scholes assumptions it is constrained by probability, stochastic calculus and no-arbitrage.
+
+A particularly natural coordinate is **log-moneyness**
 
 \[
-P_T=(K-S_T)^+=\max(K-S_T,0).
+m=\log\frac{S}{K}.
 \]
 
-The computational models therefore attempt to approximate
+The quantity \(\sigma\sqrt T\) also appears naturally because Brownian motion satisfies the scaling relation
 
 \[
-V=f(S,K,T,r,\sigma),
+W_T\overset{d}=\sqrt T Z,
+\qquad Z\sim N(0,1).
 \]
 
-with calls and puts treated separately.
-
-A particularly useful dimensionless variable is **log-moneyness**
-
-\[
-m=\log\frac{S}{K},
-\]
-
-which measures relative rather than absolute moneyness. The XGBoost implementation explicitly includes \(\log(S/K)\) and \(\sqrt T\) as engineered features.
+This is why transformations such as \(\log(S/K)\) and \(\sqrt T\) are mathematically motivated features rather than arbitrary preprocessing.
 
 ---
 
-## 2. Black–Scholes theory
+## 2. Geometric Brownian motion
 
-The theoretical starting point is the Black–Scholes model. Under the risk-neutral measure \(\mathbb Q\), the stock price follows geometric Brownian motion
+The starting point is the stochastic differential equation
+
+\[
+dS_t=\mu S_t\,dt+\sigma S_t\,dW_t.
+\]
+
+Under the physical measure, \(\mu\) represents the expected rate of return. For pricing, I work under the risk-neutral measure \(\mathbb Q\), where the drift becomes the risk-free rate:
 
 \[
 dS_t=rS_t\,dt+\sigma S_t\,dW_t^{\mathbb Q}.
 \]
 
-Applying Itô's lemma to \(\log S_t\) gives
+This SDE is the mathematical model underlying the code in `models/BlackScholes.py` and `models/MonteCarlo.py`.
+
+### Applying Itô's lemma
+
+Set
 
 \[
-d\log S_t=\left(r-\frac12\sigma^2\right)dt+\sigma\,dW_t^{\mathbb Q},
+X_t=\log S_t.
 \]
 
-hence
+Itô's lemma gives
 
 \[
-S_T=S_0\exp\left[\left(r-\frac12\sigma^2\right)T+\sigma\sqrt T Z\right],
-\qquad Z\sim N(0,1).
+dX_t
+=\frac{1}{S_t}dS_t
+-\frac{1}{2S_t^2}(dS_t)^2.
 \]
 
-Risk-neutral valuation gives
+Since
 
 \[
-V_0=e^{-rT}\mathbb E^{\mathbb Q}[\Phi(S_T)],
+(dW_t)^2=dt,
 \]
 
-where \(\Phi\) is the payoff.
-
-For a European call,
+we have
 
 \[
-C=S\Phi(d_1)-Ke^{-rT}\Phi(d_2),
+(dS_t)^2=\sigma^2S_t^2dt.
 \]
 
-and for a European put,
+Therefore
 
 \[
-P=Ke^{-rT}\Phi(-d_2)-S\Phi(-d_1),
+d\log S_t
+=\left(r-\frac12\sigma^2\right)dt
++\sigma dW_t^{\mathbb Q}.
 \]
 
-where
+Integrating from \(0\) to \(T\),
 
 \[
-d_1=\frac{\log(S/K)+(r+\tfrac12\sigma^2)T}{\sigma\sqrt T},
-\qquad d_2=d_1-\sigma\sqrt T.
+\log S_T
+=
+\log S_0
++\left(r-\frac12\sigma^2\right)T
++\sigma W_T^{\mathbb Q}.
 \]
 
-Here \(\Phi\) is the standard normal CDF.
+Since
 
-This formula exposes the structure the ML models are trying to approximate. In particular, it explains why spot, strike, maturity, interest rates and volatility matter, and why the transformations \(\log(S/K)\) and \(\sqrt T\) are natural features.
+\[
+W_T^{\mathbb Q}=\sqrt T Z,
+\qquad Z\sim N(0,1),
+\]
 
-The implementation in `models/BlackScholes.py` evaluates the closed-form solution and computes MAE, RMSE, MAPE and \(R^2\) against the test prices.
+I obtain
+
+\[
+S_T
+=S_0\exp\left[
+\left(r-\frac12\sigma^2\right)T
++\sigma\sqrt T Z
+\right].
+\]
+
+This is the reason the terminal stock price is lognormally distributed in the Black--Scholes model.
 
 ---
 
-## 3. Monte Carlo as numerical integration
+## 3. Risk-neutral valuation
 
-Monte Carlo pricing starts from the same risk-neutral expectation:
+Once the risk-neutral dynamics are known, the price of a derivative with payoff \(\Phi(S_T)\) is
 
 \[
 V_0=e^{-rT}\mathbb E^{\mathbb Q}[\Phi(S_T)].
 \]
 
-Generate independent samples
+For a European call,
+
+\[
+C_0=e^{-rT}\mathbb E^{\mathbb Q}[(S_T-K)^+],
+\]
+
+and for a European put,
+
+\[
+P_0=e^{-rT}\mathbb E^{\mathbb Q}[(K-S_T)^+].
+\]
+
+This expectation is the central mathematical object behind the project.
+
+There are then several ways of approaching it:
+
+- evaluate it analytically;
+- approximate it numerically using Monte Carlo;
+- learn the resulting input-output map from data.
+
+The first two approaches retain an explicit probabilistic interpretation. The machine-learning models instead try to approximate the resulting pricing surface statistically.
+
+---
+
+## 4. Deriving the Black--Scholes formula
+
+Evaluating the risk-neutral expectation gives the Black--Scholes formula
+
+\[
+C=S\Phi(d_1)-Ke^{-rT}\Phi(d_2),
+\]
+
+where
+
+\[
+d_1
+=
+\frac{\log(S/K)+(r+\frac12\sigma^2)T}
+{\sigma\sqrt T},
+\]
+
+and
+
+\[
+d_2=d_1-\sigma\sqrt T.
+\]
+
+For a put,
+
+\[
+P=Ke^{-rT}\Phi(-d_2)-S\Phi(-d_1).
+\]
+
+Here \(\Phi\) is the standard normal CDF.
+
+The appearance of the normal CDF is a direct consequence of the normal random variable in the expression for \(\log S_T\). The pricing formula is therefore ultimately an integration problem involving the lognormal distribution of \(S_T\).
+
+The code in `models/BlackScholes.py` implements this closed-form expression and uses it as the main theoretical benchmark.
+
+---
+
+## 5. The Black--Scholes PDE
+
+The same price can be obtained from a PDE rather than directly from the risk-neutral expectation.
+
+Suppose the option value is \(V(S,t)\). Applying Itô's lemma,
+
+\[
+dV
+=
+\left(
+V_t+\mu SV_S+\frac12\sigma^2S^2V_{SS}
+\right)dt
++\sigma SV_SdW_t.
+\]
+
+Construct the delta-hedged portfolio
+
+\[
+\Pi=V-\Delta S.
+\]
+
+Choosing
+
+\[
+\Delta=V_S
+\]
+
+eliminates the stochastic term. The resulting portfolio is locally riskless, so no-arbitrage requires it to earn the risk-free rate.
+
+This gives the Black--Scholes PDE
+
+\[
+\boxed{
+V_t+\frac12\sigma^2S^2V_{SS}+rSV_S-rV=0
+}
+\]
+
+with terminal condition determined by the payoff.
+
+This gives one of the central mathematical connections in the project:
+
+\[
+\boxed{
+\text{stochastic differential equations}
+\leftrightarrow
+\text{Itô calculus}
+\leftrightarrow
+\text{no-arbitrage}
+\leftrightarrow
+\text{PDEs}
+}
+\]
+
+The risk-neutral expectation and the PDE are two mathematical descriptions of the same pricing problem.
+
+---
+
+## 6. Monte Carlo as numerical probability
+
+Rather than evaluate
+
+\[
+V_0=e^{-rT}\mathbb E^{\mathbb Q}[\Phi(S_T)]
+\]
+
+analytically, Monte Carlo approximates the expectation by sampling.
+
+I generate
 
 \[
 Z_1,\ldots,Z_N\overset{iid}{\sim}N(0,1)
 \]
 
-and simulate
+and calculate
 
 \[
-S_T^{(i)}=S\exp\left[\left(r-\frac12\sigma^2\right)T+\sigma\sqrt T Z_i\right].
+S_T^{(i)}
+=S\exp\left[
+\left(r-\frac12\sigma^2\right)T
++\sigma\sqrt T Z_i
+\right].
 \]
 
-The expectation is approximated by
+The estimator is
 
 \[
-\widehat V_N=e^{-rT}\frac1N\sum_{i=1}^N\Phi(S_T^{(i)}).
+\widehat V_N
+=
+\frac{e^{-rT}}{N}
+\sum_{i=1}^N\Phi(S_T^{(i)}).
 \]
 
-By the law of large numbers,
+The law of large numbers gives
 
 \[
-\widehat V_N\to V
-\quad\text{as }N\to\infty,
+\widehat V_N\longrightarrow V
+\qquad\text{as }N\to\infty.
 \]
 
-while the standard Monte Carlo error is typically of order
+More precisely,
+
+\[
+\operatorname{Var}(\widehat V_N)
+=
+\frac{e^{-2rT}}{N}
+\operatorname{Var}(\Phi(S_T)),
+\]
+
+so the standard error scales like
 
 \[
 O(N^{-1/2}).
 \]
 
-The implementation uses \(N=10,000\) simulations with a fixed seed. This gives a numerical approximation to the same mathematical quantity that Black–Scholes evaluates analytically.
+The implementation uses 10,000 simulations with a fixed seed.
+
+The important mathematical point is that Monte Carlo is **not a different pricing model** here. It is a numerical approximation to the same risk-neutral expectation that leads to the Black--Scholes price.
 
 See `models/MonteCarlo.py`.
 
 ---
 
-## 4. Synthetic data: learning a known mathematical function
+## 7. Synthetic data: learning a known function
 
-The synthetic dataset is deliberately generated from Black–Scholes.
+The synthetic experiment asks a very controlled question:
 
-Historical prices for MSFT, AAPL, GOOGL, AMZN, META, NVDA and TSLA are downloaded. Log returns are calculated as
+> Can a machine-learning model learn a pricing function whose generating mathematical model is already known?
 
-\[
-r_t^{(\mathrm{log})}=\log\frac{S_t}{S_{t-1}},
-\]
-
-and a 30-day annualised realised-volatility estimate is formed using
+Historical prices are used to construct log returns
 
 \[
-\hat\sigma_t=\operatorname{sd}_{30}(r^{(\mathrm{log})})\sqrt{252}.
+r_t=\log\frac{S_t}{S_{t-1}},
 \]
 
-For each observation the code varies maturity over
+and a 30-day annualised realised-volatility estimate
 
 \[
-\{7,30,90,240,365\}\text{ days}
+\widehat\sigma_t
+=\operatorname{sd}(r_{t-29},\ldots,r_t)\sqrt{252}.
 \]
 
-and strike over
+For each observation, the code varies the maturity and strike. The strike grid is expressed relative to spot, so the resulting options cover different levels of moneyness.
+
+The Black--Scholes formula is then used to generate the target price:
 
 \[
-K\in\{0.80,0.90,0.95,1.00,1.05,1.10,1.20\}S.
+X_i=(S_i,K_i,T_i,r_i,\sigma_i),
+\qquad
+y_i=f_{BS}(X_i).
 \]
 
-Both calls and puts are generated, with the Black–Scholes value used as the target.
-
-This creates a clean mathematical experiment:
+The machine-learning problem is therefore
 
 \[
-\boxed{\text{Can ML rediscover a function whose generating mechanism is known?}}
+\boxed{\widehat f\approx f_{BS}}.
 \]
 
-A model trained on synthetic data is therefore primarily approximating the Black–Scholes pricing surface, rather than predicting a genuinely unknown market process.
+This is essentially a nonlinear function-approximation experiment. Since the target is generated by Black--Scholes, there is a known mathematical function against which the learned approximation can be compared.
 
 See `data/generate_datasets.py`.
 
 ---
 
-## 5. Real option data and domain shift
+## 8. Real option data
 
-The real dataset is obtained from option chains and contains quantities of the form
+The real-data experiment is mathematically different.
 
-\[
-(S,K,T,r,\sigma,\text{option type},V_{\mathrm{market}}).
-\]
-
-For these observations, \(\sigma\) is taken from the option chain's implied-volatility field and the observed option price is the target.
-
-This changes the mathematical problem. Real markets are not generated exactly by constant-volatility geometric Brownian motion. The observed pricing surface can reflect
-
-- stochastic and time-varying volatility;
-- volatility smiles and skews;
-- bid–ask spreads and liquidity;
-- dividends and market conventions;
-- model misspecification;
-- noisy observed prices.
-
-The project therefore studies the distribution shift
+The observed data contain quantities such as
 
 \[
-\text{synthetic distribution}\longrightarrow\text{real market distribution}.
+(S,K,T,r,\sigma_{imp},\text{option type},V_{market}).
 \]
 
-A model that performs very well on synthetic data but deteriorates on real data may have learned the mathematical structure of Black–Scholes without learning the structure of actual market prices.
+In real markets, the volatility required to reproduce observed prices is generally not a single constant. Instead, it can depend on strike and maturity:
+
+\[
+\sigma_{imp}=\sigma_{imp}(K,T).
+\]
+
+This produces the implied-volatility surface and phenomena such as volatility smiles and skews.
+
+Consequently, a real market pricing surface need not satisfy the constant-volatility Black--Scholes model exactly.
+
+Other effects can also appear, including dividends, liquidity, bid--ask spreads, stochastic volatility, jumps and noise in observed prices.
+
+This makes the synthetic-to-real comparison particularly interesting. If an ML model performs very well on synthetic data but deteriorates on real data, the difference is not necessarily an ML failure. It may indicate that the real data contain structure that is absent from the Black--Scholes model.
 
 ---
 
-## 6. Machine-learning models
+## 9. Machine learning as approximation theory
 
-Four regression families are compared.
+I interpret each ML model as constructing an approximation
+
+\[
+\widehat f(x)\approx f(x).
+\]
+
+The interesting mathematical question is what kind of approximation each model produces.
 
 ### Random Forest
 
-A random forest approximates the pricing map through an ensemble of decision trees. Each tree partitions feature space and produces approximately piecewise-constant predictions:
+A decision tree partitions feature space into regions
 
 \[
-\hat f(x)\approx f(x),
-\qquad x=(S,K,T,r,\sigma,\text{maturity days}).
+\mathcal X=R_1\cup\cdots\cup R_m
+\]
+
+and produces an approximately constant prediction on each region:
+
+\[
+\widehat f(x)=c_j,
+\qquad x\in R_j.
+\]
+
+A random forest averages many such trees,
+
+\[
+\widehat f(x)=\frac1B\sum_{b=1}^{B}f_b(x).
 \]
 
 The implementation uses 500 trees with maximum depth 20.
@@ -253,145 +447,135 @@ See `models/Random Forest/RandomForest.py`.
 
 ### XGBoost
 
-XGBoost constructs an additive tree model of the form
+XGBoost builds an additive approximation
 
 \[
-\hat f(x)=\sum_{m=1}^{M}\eta h_m(x),
+\widehat f_M(x)=\sum_{m=1}^{M}\eta h_m(x),
 \]
 
-where successive trees are fitted to reduce the loss. The implementation trains on
+where successive trees are chosen to improve the current approximation.
+
+I find it useful to interpret this as iterative optimisation in a function space: rather than selecting one complicated function immediately, the model repeatedly adds corrections to the current approximation.
+
+The implementation also introduces
 
 \[
-\log(1+V)
+\log(S/K),\qquad \sqrt T
 \]
 
-and converts predictions back using
+as features and trains on
 
 \[
-\hat V=\exp(\widehat{\log(1+V)})-1.
+y'=\log(1+V),
 \]
 
-It also adds the mathematically motivated features
+before transforming predictions back with
 
 \[
-\log(S/K),\qquad \sqrt T.
+\widehat V=e^{\widehat y'}-1.
 \]
 
 See `models/XGBoost/XGBoost.py`.
 
 ### CatBoost
 
-CatBoost is a gradient-boosted decision-tree method used here as a flexible nonlinear approximation to
+CatBoost is another gradient-boosted tree method. Here it is used as a flexible nonlinear approximation to the pricing surface.
+
+The underlying problem remains
 
 \[
-(S,K,T,r,\sigma,\text{maturity days})\mapsto V.
+(S,K,T,r,\sigma,\text{maturity})\mapsto V.
 \]
-
-Models are trained separately by ticker and option type, using both synthetic and real training regimes.
 
 See `models/CatBoost/CatBoost.py`.
 
 ### LSTM
 
-An LSTM is a recurrent neural network whose hidden state is updated through nonlinear gated maps, schematically
+An LSTM uses a recurrent state and nonlinear gates. Schematically,
 
 \[
 (h_t,c_t)=F(x_t,h_{t-1},c_{t-1}).
 \]
 
-The implementation standardises the six features and feeds them through two LSTM layers followed by dense layers.
+The implementation standardises the pricing variables and passes them through two LSTM layers followed by dense layers.
 
-**Important methodological caveat:** the current implementation does not feed a genuine temporal price sequence to the LSTM. The six pricing variables are reshaped as a sequence of length six. Thus this experiment tests nonlinear function approximation with an LSTM architecture; it does not establish that LSTMs exploit temporal market dynamics.
+There is an important mathematical caveat here: the six pricing variables are reshaped as a sequence of length six, but they are not six consecutive time observations. Therefore I interpret this experiment as nonlinear function approximation using an LSTM architecture, rather than as evidence that the model has learned temporal market dynamics.
 
 See `models/LSTM/LSTM.py`.
 
 ---
 
-## 7. Classical mathematics vs learned structure
+## 10. Why the feature transformations matter
 
-| Approach | Mathematical object | Main assumption |
-|---|---|---|
-| Black–Scholes | Closed-form risk-neutral expectation | GBM, constant \(\sigma\) |
-| Monte Carlo | Same expectation by sampling | Same stochastic model; numerical approximation |
-| Random Forest | Nonlinear pricing surface | Piecewise tree approximation |
-| XGBoost | Additive tree approximation | Gradient-boosted nonlinear regression |
-| CatBoost | Additive boosted-tree approximation | Flexible nonlinear regression |
-| LSTM | Learned nonlinear map | Neural representation of feature interactions |
+The structure of the Black--Scholes formula itself suggests useful coordinates.
 
-Black–Scholes and Monte Carlo have an explicit probabilistic interpretation. The ML models primarily learn the input-output relationship from examples.
+Recall
 
-The research question is therefore not merely **which algorithm wins**, but what mathematical structure is retained when an explicit pricing model is replaced by statistical approximation.
+\[
+d_1
+=
+\frac{\log(S/K)+(r+\frac12\sigma^2)T}
+{\sigma\sqrt T}.
+\]
+
+This immediately highlights
+
+\[
+\log(S/K)
+\]
+
+and
+
+\[
+\sigma\sqrt T.
+\]
+
+The first measures relative moneyness. The second is the natural scale of stochastic variation over the time horizon.
+
+Thus feature engineering can be viewed as an attempt to expose the geometry already present in the mathematical model.
+
+This is particularly important for the ML models: if the theoretical pricing surface has natural coordinates, giving a model access to those coordinates can make the approximation problem substantially more natural.
 
 ---
 
-## 8. Evaluation mathematics
+## 11. Evaluation: accuracy is only the first test
 
-For observed prices \(y_i\) and predictions \(\hat y_i\), the project uses standard regression metrics.
+For observed prices \(y_i\) and predictions \(\widehat y_i\), I use standard regression metrics.
 
 ### Mean Absolute Error
 
 \[
-\operatorname{MAE}=\frac1n\sum_{i=1}^{n}|y_i-\hat y_i|.
+MAE=\frac1n\sum_{i=1}^n|y_i-\widehat y_i|.
 \]
 
 ### Root Mean Squared Error
 
 \[
-\operatorname{RMSE}=\sqrt{\frac1n\sum_{i=1}^{n}(y_i-\hat y_i)^2}.
+RMSE=\sqrt{\frac1n\sum_{i=1}^n(y_i-\widehat y_i)^2}.
 \]
 
-RMSE penalises large pricing errors more strongly than MAE.
+RMSE penalises large errors more heavily than MAE.
 
 ### Coefficient of determination
 
 \[
-R^2=1-\frac{\sum_i(y_i-\hat y_i)^2}{\sum_i(y_i-\bar y)^2}.
+R^2
+=1-
+\frac{\sum_i(y_i-\widehat y_i)^2}
+{\sum_i(y_i-\bar y)^2}.
 \]
 
-A high \(R^2\) means the predictions explain much of the variation in the evaluated sample; it is not by itself evidence of economic usefulness.
+These metrics measure pointwise predictive accuracy, but they do not tell me whether a learned pricing surface has the correct mathematical structure.
 
-### Domain shift
-
-The evaluation compares real- and synthetic-trained ML models through
-
-\[
-\Delta RMSE=RMSE_{real}-RMSE_{synthetic}.
-\]
-
-This quantifies how much performance changes when the data-generating regime changes.
-
-See `evaluation/evaluation.py`.
+That distinction matters enormously in option pricing.
 
 ---
 
-## 9. Mathematical extensions
+## 12. Mathematical consistency of the learned surface
 
-For a Year 2/3 mathematics project, the most valuable next steps are arguably stronger mathematical diagnostics rather than simply adding more algorithms.
+A good approximation should not merely produce numbers close to observed prices. It should ideally preserve structural properties implied by no-arbitrage and the payoff.
 
-### Derive the Black–Scholes PDE
-
-A self-financing delta-hedged portfolio leads to
-
-\[
-\frac{\partial V}{\partial t}
-+\frac12\sigma^2S^2\frac{\partial^2V}{\partial S^2}
-+rS\frac{\partial V}{\partial S}
--rV=0.
-\]
-
-This connects stochastic calculus, PDEs and no-arbitrage pricing.
-
-### Study the Greeks
-
-Differentiate the pricing map to obtain
-
-\[
-\Delta,\ \Gamma,\ \Theta,\ \mathrm{Vega},\ \rho.
-\]
-
-A strong ML extension is to test whether a learned surface reproduces these derivatives.
-
-### Enforce put–call parity
+### Put--call parity
 
 For European options,
 
@@ -399,42 +583,183 @@ For European options,
 C-P=S-Ke^{-rT}.
 \]
 
-This is an exact structural constraint and can be used to test whether predictions are financially coherent.
+This is an exact relationship.
 
-### Test convexity and monotonicity
+### Monotonicity
 
-A valid European call surface should satisfy structural conditions such as monotonicity in \(S\) and convexity in \(K\) under standard assumptions. These constraints are more informative than a single global RMSE.
-
-### Study the implied-volatility surface
-
-Rather than assuming a constant \(\sigma\), investigate
+For a European call,
 
 \[
-\sigma_{imp}=\sigma_{imp}(K,T).
+\frac{\partial C}{\partial S}\geq0,
+\qquad
+\frac{\partial C}{\partial K}\leq0.
 \]
 
-The resulting smile/skew structure gives a direct empirical measure of where Black–Scholes fails.
+Increasing the underlying should not decrease the value of a call, while increasing the strike should not increase it.
 
-### Quantify Monte Carlo error
+### Convexity
 
-For the estimator
+Under the standard assumptions,
 
 \[
-\widehat V_N=e^{-rT}\frac1N\sum_{i=1}^{N}\Phi(S_T^{(i)}),
+\frac{\partial^2C}{\partial S^2}\geq0.
 \]
 
-its variance is
+This quantity is Gamma.
+
+These conditions suggest a much stronger evaluation framework for ML models. Instead of only asking
 
 \[
-\operatorname{Var}(\widehat V_N)
-=\frac{e^{-2rT}}{N}\operatorname{Var}(\Phi(S_T)).
+|V-\widehat V|\text{ small?}
 \]
 
-This can be compared empirically with the predicted \(N^{-1/2}\) convergence rate.
+I can ask whether
+
+\[
+\widehat V
+\]
+
+has approximately the same derivatives, monotonicity and convexity as the theoretical pricing surface.
 
 ---
 
-## 10. Repository structure
+## 13. Greeks and local structure
+
+The Greeks are derivatives of the pricing function:
+
+\[
+\Delta=\frac{\partial V}{\partial S},
+\qquad
+\Gamma=\frac{\partial^2V}{\partial S^2},
+\]
+
+and
+
+\[
+\Theta=\frac{\partial V}{\partial t},
+\qquad
+\mathrm{Vega}=\frac{\partial V}{\partial\sigma},
+\qquad
+\rho=\frac{\partial V}{\partial r}.
+\]
+
+This gives a more demanding test of a learned approximation.
+
+A model could have a very small price RMSE while producing poor local derivatives. In that case it has approximated the values without accurately recovering the local geometry of the pricing surface.
+
+A natural extension is therefore to compare
+
+\[
+\frac{\partial \widehat V}{\partial S}
+\quad\text{with}\quad
+\frac{\partial V_{BS}}{\partial S}
+\]
+
+and similarly for the other Greeks.
+
+For a neural network this can be approached through automatic differentiation; for tree models, finite differences or local perturbations can be used.
+
+---
+
+## 14. Synthetic data versus real data
+
+The two datasets correspond to two different mathematical settings.
+
+For synthetic data,
+
+\[
+y=f_{BS}(x).
+\]
+
+The generating function is known.
+
+For real market data, a useful schematic model is
+
+\[
+y=f_{market}(x)+\varepsilon,
+\]
+
+where both the underlying pricing mechanism and the noise are unknown.
+
+Therefore the comparison allows me to distinguish, at least conceptually, between
+
+\[
+\boxed{\text{function-approximation error}}
+\]
+
+and effects associated with
+
+\[
+\boxed{\text{model misspecification, market structure and noise}.}
+\]
+
+This is why the synthetic experiment is important: it gives a controlled mathematical benchmark before moving to the much less structured real-data problem.
+
+---
+
+## 15. Further mathematical directions
+
+### Feynman--Kac
+
+A natural theoretical extension is the Feynman--Kac theorem, which gives a precise connection between the Black--Scholes PDE and the risk-neutral expectation.
+
+This unifies the probabilistic and analytical viewpoints:
+
+\[
+\text{PDE solution}
+\longleftrightarrow
+\text{conditional expectation under }\mathbb Q.
+\]
+
+### Implied volatility
+
+Instead of assuming a constant volatility, define \(\sigma_{imp}\) implicitly by
+
+\[
+C_{market}
+=
+C_{BS}(S,K,T,r,\sigma_{imp}).
+\]
+
+This produces the surface
+
+\[
+(K,T)\mapsto\sigma_{imp}(K,T).
+\]
+
+Studying its smile and skew gives a direct way of investigating where the constant-volatility model fails.
+
+### Monte Carlo convergence
+
+I can experimentally vary \(N\) and test whether the error behaves like
+
+\[
+N^{-1/2}.
+\]
+
+This connects the empirical implementation directly to the theoretical variance calculation.
+
+### Structure-preserving machine learning
+
+A particularly interesting extension is to include mathematical constraints directly in the learning objective.
+
+Instead of minimising only
+
+\[
+\sum_i(V_i-\widehat V_i)^2,
+\]
+
+one could include penalties for violating put--call parity, monotonicity or convexity.
+
+The question then becomes:
+
+> Can I learn the pricing surface from data while preserving the mathematics that makes it a valid pricing surface?
+
+That is a much more interesting problem than simply minimising prediction error.
+
+---
+
+## 16. Repository structure
 
 ```text
 .
@@ -468,54 +793,66 @@ This can be compared empirically with the predicted \(N^{-1/2}\) convergence rat
 
 ---
 
-## 11. Running the project
+## 17. Running the project
 
-Main Python dependencies:
+The main dependencies are:
 
 ```bash
 pip install numpy pandas scipy scikit-learn yfinance catboost xgboost tensorflow joblib
 ```
 
-Intended workflow:
+The intended workflow is
 
 ```text
-Generate datasets
+Generate data
       ↓
-Black–Scholes benchmark
+Black--Scholes analytical benchmark
       ↓
-Monte Carlo benchmark
+Monte Carlo numerical benchmark
       ↓
 Random Forest / XGBoost / CatBoost / LSTM
       ↓
-Evaluate on held-out real options
+Out-of-sample evaluation
       ↓
-Compare synthetic vs real performance
+Synthetic vs real comparison
       ↓
-Test mathematical constraints
+Mathematical consistency checks
 ```
 
-The current scripts contain a local Windows `BASE_DIR` path. For use on another machine, change this path or refactor it to a project-relative path.
+The current scripts contain a local Windows `BASE_DIR`, so this path needs to be changed when running the project on another machine.
 
 ---
 
-## 12. Interpretation
+## 18. Perspective
 
-The central research questions are:
+The main idea behind the project is that option pricing is fundamentally a mathematical problem before it is a machine-learning problem.
 
-1. **Can ML recover known theory?** On synthetic data, the target is generated directly from Black–Scholes, so performance measures approximation of a known nonlinear pricing function.
+The Black--Scholes price can be written as
 
-2. **Can ML generalise beyond the theoretical model?** On real option data, deviations from synthetic performance expose model misspecification and distribution shift.
+\[
+V_0=e^{-rT}\mathbb E^{\mathbb Q}[\Phi(S_T)],
+\]
 
-3. **Does low prediction error imply a good financial model?** Not necessarily. A model can have low RMSE while violating put–call parity, monotonicity, convexity or other structural properties.
+but this single expression connects several areas of mathematics:
 
-For option pricing, **mathematical consistency is part of model quality**.
+\[
+\boxed{
+\text{probability}
+\;+
+\text{stochastic processes}
+\;+
+\text{Itô calculus}
+\;+
+\text{PDEs}
+\;+
+\text{numerical analysis}
+\;+
+\text{function approximation}
+}
+\]
 
-The natural direction of the project is therefore from prediction accuracy towards **structure-aware modelling**: learning from data while preserving the mathematical properties of a valid option-pricing surface.
+Black--Scholes evaluates the pricing problem analytically. Monte Carlo approximates the same expectation through sampling. The machine-learning models attempt to approximate the resulting pricing surface from examples.
 
----
+The interesting question is therefore not simply which model gives the smallest RMSE. It is whether the approximation captures the **mathematical structure** of the object being approximated.
 
-## Background
-
-The project draws on stochastic calculus, Itô's lemma, geometric Brownian motion, risk-neutral pricing, martingale measures, the Black–Scholes PDE, Monte Carlo estimation, regression, ensemble methods, neural networks and no-arbitrage theory.
-
-This repository is a computational research project around those ideas, not a production trading or pricing system.
+The code is my way of experimenting with those ideas: starting from an explicit mathematical model, constructing numerical approximations to it, and then asking how much of that structure can be recovered when the explicit formula is replaced by a learned function.
