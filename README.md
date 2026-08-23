@@ -2,7 +2,7 @@
 
 ### UCL Year 2 Summer Research Programme
 
-This repository contains the work from my **UCL Year 2 Summer Research Programme** group project, *A Comparative Analysis of Methods for Option Pricing*.
+This repository contains the my contribution to **UCL Year 2 Summer Research Programme** group project, *A Comparative Analysis of Methods for Option Pricing*.
 
 The project investigated different approaches to pricing **European vanilla options**, bringing together stochastic calculus, mathematical finance, numerical methods, and machine learning. Rather than treating the methods as isolated techniques, we used the same pricing problem to compare analytical, numerical, and data-driven approaches.
 
