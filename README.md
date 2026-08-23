@@ -2,23 +2,64 @@
 
 ### UCL Year 2 Summer Research Programme
 
-This repository contains the my contribution to **UCL Year 2 Summer Research Programme** group project, *A Comparative Analysis of Methods for Option Pricing*.
+This repository contains **my code and implementation work** for a UCL Year 2 Summer Research Programme group project: **A Comparative Analysis of Methods for Option Pricing**.
 
-The project investigated different approaches to pricing **European vanilla options**, bringing together stochastic calculus, mathematical finance, numerical methods, and machine learning. Rather than treating the methods as isolated techniques, we used the same pricing problem to compare analytical, numerical, and data-driven approaches.
+The research was completed as a group, but the **code contained in this repository was written and developed by me**. My primary contribution to the wider project was the **machine-learning and computational modelling component**, including the data pipelines, model implementations, training, prediction and evaluation framework. The repository is therefore intended to document my implementation of the project rather than imply that I independently carried out every part of the group's research.
 
-My **primary contribution was the machine-learning component**, including the design of the supervised-learning pipeline, data preparation, model development, training, prediction, and evaluation. I also contributed to the wider pricing framework and the implementation and validation of the classical methods.
+The project compared analytical, numerical and machine-learning approaches to pricing **European vanilla options**, combining stochastic calculus, mathematical finance, numerical methods and supervised learning.
+
+> **Important note:** The real market options used in this project are treated as European-style options for the purposes of comparison with Black–Scholes and Monte Carlo. The market data itself comes from U.S. equity option chains.
 
 ---
 
-## Project overview
+## Project objective
 
-The project considered three broad approaches to option pricing:
+The central machine-learning problem can be expressed as
 
-| Approach | Methods | Purpose |
+\[
+(S,K,T,r,\sigma)\longrightarrow V,
+\]
+
+where:
+
+- \(S\) = current underlying stock price;
+- \(K\) = strike price;
+- \(T\) = time remaining until expiration;
+- \(r\) = risk-free interest rate;
+- \(\sigma\) = volatility; and
+- \(V\) = theoretical or observed option price.
+
+The goal was to build machine-learning models that take market and contract parameters as inputs and learn to produce an option price.
+
+We then compared the machine-learning approaches with established pricing methods, particularly **Black–Scholes** and **Monte Carlo**, using unseen option data and standard regression metrics.
+
+---
+
+## Why use machine learning for option pricing?
+
+Black–Scholes gives an elegant analytical solution, but it relies on strong assumptions, including constant volatility and an idealised market environment. Real option prices can reflect effects that are difficult to represent using the basic model, including changing implied volatility, liquidity, bid–ask spreads, dividends, market expectations and changes in demand around events such as earnings announcements.
+
+This motivates the machine-learning question:
+
+> **Can a data-driven model learn relationships in observed option prices that are not captured by a simple analytical pricing formula?**
+
+Machine learning does not require us to specify a closed-form relationship between every input and the option price. Instead, the model learns an approximation from examples.
+
+A neural network, for example, can approximate a broad class of continuous input-output relationships given sufficient data and an appropriate architecture. In this project, the same general idea was applied to the option-pricing function.
+
+For background on neural-network approaches to option pricing, see the references at the end of this README.
+
+---
+
+## Project structure
+
+The wider research project considered three categories of pricing methods:
+
+| Approach | Methods | Role in the comparison |
 |---|---|---|
-| **Analytical** | Black–Scholes | Closed-form benchmark under the model assumptions |
-| **Numerical** | Monte Carlo, Antithetic Variates | Simulation-based approximation of the risk-neutral expectation |
-| **Machine Learning** | Random Forest, XGBoost, CatBoost, LSTM | Learn the mapping from market parameters to option prices |
+| **Analytical** | Black–Scholes | Theoretical benchmark |
+| **Numerical** | Monte Carlo, Antithetic Variates | Simulation-based pricing |
+| **Machine Learning** | LSTM, Random Forest, XGBoost, CatBoost | Data-driven approximation |
 
 The overall workflow was:
 
@@ -38,162 +79,217 @@ Brownian Motion / Geometric Brownian Motion
                     ↓
           Machine Learning Pipeline
                     ↓
-     Synthetic + Real Market Data
+       Synthetic + Real Market Data
                     ↓
- Random Forest / XGBoost / CatBoost / LSTM
+       LSTM / Random Forest / XGBoost
+                    ↓
+                 CatBoost
                     ↓
         Evaluation on Unseen Data
 ```
 
-The central machine-learning problem was to approximate the pricing function
-
-\[
-(S,K,T,r,\sigma)\longrightarrow V,
-\]
-
-where:
-
-- \(S\) = underlying asset price;
-- \(K\) = strike price;
-- \(T\) = time to maturity;
-- \(r\) = risk-free interest rate;
-- \(\sigma\) = volatility; and
-- \(V\) = option price.
-
-This formulation allowed us to investigate whether flexible machine-learning models could learn the complex nonlinear relationships between market parameters and option prices.
-
 ---
 
-## My contribution: machine learning
+# Machine Learning
 
-My main responsibility within the group was the **machine-learning side of the project**.
+## My primary contribution
 
-I first spent time understanding the mathematical structure of the pricing problem before implementing the ML pipeline. This was important because the goal was not simply to train a model to minimise an error metric; we wanted to understand what the models were learning and how their predictions compared with established pricing methods.
+The machine-learning component was my **primary contribution to the group project**, and the code in this repository for the data preparation, model development, training, prediction and evaluation was **implemented by me**.
 
-My work covered the main stages of the pipeline:
+My workflow was:
 
 ```text
-Data preparation
-      ↓
-Feature construction / preprocessing
-      ↓
-Train-test organisation
-      ↓
+Data collection / generation
+          ↓
+Data cleaning and preparation
+          ↓
+Feature construction
+          ↓
+Stratification across ticker and maturity
+          ↓
+Train / test organisation
+          ↓
 Model training
-      ↓
+          ↓
 Prediction
-      ↓
+          ↓
 Evaluation
-      ↓
-Comparison across models and datasets
+          ↓
+Comparison of models
 ```
 
-The models I worked with were:
-
-- **Random Forest**
-- **XGBoost**
-- **CatBoost**
-- **LSTM**
-
-I investigated these models as different ways of approximating the option-pricing function rather than assuming that a more complex model would automatically produce a better result.
+I worked with both synthetic and real market data so that the models could be tested in a controlled theoretical setting and against actual observed option prices.
 
 ---
 
-## Synthetic vs. real market data
+## Datasets
 
-A major part of the ML analysis was comparing performance under two different data-generating settings.
+The ML experiments use three main datasets.
 
-### 1. Synthetic data
+### `synthetic_training_data.csv`
 
-Synthetic option data were generated using the **Black–Scholes framework**. This gave us a controlled environment in which the underlying pricing function was known.
+The synthetic training set combines:
+
+- historical stock prices;
+- historical realised volatility; and
+- Black–Scholes pricing.
+
+The target is therefore generated from the Black–Scholes framework. This creates a controlled learning problem where the underlying pricing relationship is known.
 
 Conceptually,
 
 \[
-X_i=(S_i,K_i,T_i,r_i,\sigma_i),
+X=(S,K,T,r,\sigma),
 \qquad
-V_i=f_{BS}(X_i).
+y=f_{BS}(X).
 \]
 
-This allowed us to ask a clean question:
+This allows us to test whether the ML models can learn to reproduce a known theoretical pricing surface.
 
-> **Can a machine-learning model learn a known theoretical pricing function?**
+### `real_training_data.csv`
 
-Because the target prices came from the Black–Scholes model, this experiment provided a useful benchmark for the approximation capabilities of the ML models.
+This dataset contains **actual market option prices** from U.S. equity option chains.
 
-### 2. Real U.S. equity options
+### `real_test_data.csv`
 
-We also worked with **real U.S. equity option-chain data from major U.S. equities**.
+This contains actual market option prices held out for testing. Approximately **20% of the real observations were held out** so that the models could be evaluated on unseen data.
 
-This introduced a much less idealised setting. Real market prices can reflect effects that are not fully captured by the basic Black–Scholes assumptions, including changing implied volatility, bid–ask spreads, liquidity, dividends, and other market effects.
+The distinction between these datasets is important because a model trained entirely on Black–Scholes-generated labels is effectively learning to reproduce the Black–Scholes pricing relationship. Training with real market prices instead gives the model an opportunity to learn patterns that are present in observed market data but absent from the simplified theoretical model.
 
-This comparison was important because strong performance on synthetic Black–Scholes data does not necessarily imply equally strong performance on real market observations.
+---
+
+## Equity universe
+
+The real-data analysis focused on major U.S. equities, including:
+
+- **Apple Inc. (AAPL)**
+- **Microsoft Corporation (MSFT)**
+- **NVIDIA Corporation (NVDA)**
+- **Tesla, Inc. (TSLA)**
+- **Amazon.com, Inc. (AMZN)**
+
+The data were obtained using **Yahoo Finance / `yfinance`**. For the purposes of this project, the observed equity options were treated as European-style contracts so that they could be compared consistently with the Black–Scholes and Monte Carlo frameworks.
 
 ---
 
 ## Stratified data pipeline
 
-One of the important parts of the machine-learning setup was making sure that the training data were not dominated by particular assets or maturities.
+A key part of the ML setup was ensuring that the training data were not dominated by particular assets or expiry dates.
 
-The data pipeline was **stratified across ticker and maturity**, allowing the models to be trained on a more balanced representation of the underlying market conditions and expiry structure.
+The data pipeline was stratified across:
 
-This helped make the evaluation more meaningful by reducing the risk that performance was driven primarily by a particular ticker or maturity bucket.
+- **ticker**; and
+- **maturity**.
 
-The models were subsequently evaluated on **unseen data**, allowing us to assess out-of-sample predictive performance rather than simply measuring how well the models fitted their training observations.
+This was intended to expose the models to a balanced range of market conditions and expiry structures rather than allowing a small number of assets or maturities to dominate the training set.
 
----
-
-## Machine-learning models
-
-### Random Forest
-
-Random Forest provides an ensemble of decision trees, with predictions aggregated across the individual trees.
-
-It gives a useful nonlinear baseline for the pricing problem and allows the relationship between the input variables and option price to be modelled without imposing a specific functional form.
-
-Implementation:
-
-[`models/Random Forest/RandomForest.py`](models/Random%20Forest/RandomForest.py)
-
-### XGBoost
-
-XGBoost uses gradient-boosted decision trees to construct an additive approximation to the pricing function.
-
-This was particularly useful for investigating nonlinear interactions between variables such as underlying price, strike, maturity, and volatility.
-
-Implementation:
-
-[`models/XGBoost/XGBoost.py`](models/XGBoost/XGBoost.py)
-
-### CatBoost
-
-CatBoost provided another gradient-boosting approach for modelling the nonlinear option-pricing relationship.
-
-I used it as a comparison against the other tree-based models, allowing us to investigate whether different boosting methodologies produced materially different predictive behaviour.
-
-Implementation:
-
-[`models/CatBoost/CatBoost.py`](models/CatBoost/CatBoost.py)
-
-### LSTM
-
-I also investigated an LSTM-based neural-network architecture.
-
-The LSTM experiment was intended as an investigation of whether a neural architecture could learn the nonlinear pricing relationship from the available features. The input variables should not be interpreted as a conventional time series of consecutive observations; the experiment was instead focused on function approximation.
-
-Implementation:
-
-[`models/LSTM/LSTM.py`](models/LSTM/LSTM.py)
+The models were then evaluated on unseen observations to measure out-of-sample performance.
 
 ---
 
-## Classical pricing methods
+# Models
 
-Although my primary contribution was machine learning, the ML work was developed within the wider theoretical and computational pricing framework of the project.
+## LSTM — Long Short-Term Memory
 
-### Black–Scholes
+LSTMs are recurrent neural networks designed to retain information over sequences. They use three principal gates to control the information flowing through the cell:
 
-For a European call, the Black–Scholes price is
+1. **Forget gate** — determines which existing information should be discarded.
+2. **Input gate** — determines which new information should be stored.
+3. **Output gate** — determines which information is used to produce the current output.
+
+The motivation for considering an LSTM was that financial data naturally contain temporal structure. However, there is an important limitation in this project.
+
+An LSTM is most naturally suited to observations arranged in chronological sequences with meaningful and sufficiently regular temporal spacing. The option-chain observations obtained from Yahoo Finance are **not a clean, evenly spaced time series** of historical observations. Consequently, the LSTM was not an ideal architectural match for the available option-chain data.
+
+This helps explain its weaker performance relative to the tree-based models.
+
+The LSTM implementation in this repository was developed as part of my ML contribution.
+
+---
+
+## Random Forest
+
+Random Forest is an ensemble learning method based on multiple decision trees.
+
+A decision tree can be thought of as a sequence of questions that partitions the feature space:
+
+```text
+                 Is S > threshold?
+                    /        \
+                  Yes         No
+                  /             \
+          Is T > threshold?   ...
+             /      \
+           Yes       No
+           ↓          ↓
+       Prediction  Prediction
+```
+
+Each tree learns its own set of splits from the training data. The Random Forest combines the predictions of many trees to produce a more robust estimate.
+
+Increasing the number of trees can generally improve stability, but it also increases computational cost. This creates a practical trade-off between predictive performance and computation.
+
+The Random Forest implementation was written by me as part of the ML component.
+
+---
+
+## XGBoost
+
+XGBoost uses gradient-boosted decision trees. Rather than constructing many independent trees and averaging them in the same way as Random Forest, the model builds trees sequentially, with later trees attempting to improve the current prediction.
+
+This makes XGBoost particularly useful for learning nonlinear interactions between variables such as:
+
+\[
+S,\ K,\ T,\ r,\ \sigma.
+\]
+
+I also considered transformations motivated by the mathematical structure of option pricing, such as relative moneyness and maturity-related quantities.
+
+The XGBoost implementation was written by me as part of the ML component.
+
+---
+
+## CatBoost
+
+CatBoost is a gradient-boosting framework based on decision trees. It is designed to provide strong performance while supporting categorical features and reducing the need for extensive preprocessing in many applications.
+
+In this project, CatBoost provided another tree-based model against which Random Forest and XGBoost could be compared.
+
+The CatBoost implementation was written by me as part of the ML component.
+
+---
+
+## Neural-network approaches and MLPs
+
+The project literature review also considered **feedforward multi-layer perceptrons (MLPs)** as an alternative neural-network approach.
+
+An MLP can learn nonlinear relationships between input features and a continuous target. A typical architecture consists of an input layer, one or more hidden layers, and an output layer:
+
+```text
+(S, K, T, r, σ)
+       ↓
+  Input layer
+       ↓
+  Hidden layer(s)
+       ↓
+  Hidden layer(s)
+       ↓
+  Option price
+```
+
+A relevant approach in the literature uses `MLPRegressor` and selects architectural and optimisation parameters such as the number of hidden layers, neurons, regularisation strength and learning rate through hyperparameter search.
+
+The references below were used to inform the ML research and comparison. The repository's implemented models should be distinguished from methods discussed only in the literature review.
+
+---
+
+# Analytical and numerical pricing
+
+Although my primary contribution was machine learning, the ML experiments were designed around the wider pricing framework developed for the group project.
+
+## Black–Scholes
+
+For a European call,
 
 \[
 C=S\Phi(d_1)-Ke^{-rT}\Phi(d_2),
@@ -202,7 +298,7 @@ C=S\Phi(d_1)-Ke^{-rT}\Phi(d_2),
 where
 
 \[
-d_1=\frac{\ln(S/K)+(r+\frac{1}{2}\sigma^2)T}{\sigma\sqrt{T}}
+d_1=\frac{\ln(S/K)+(r+\frac12\sigma^2)T}{\sigma\sqrt{T}}
 \]
 
 and
@@ -211,99 +307,102 @@ and
 d_2=d_1-\sigma\sqrt{T}.
 \]
 
-The corresponding European put price is
+For a European put,
 
 \[
 P=Ke^{-rT}\Phi(-d_2)-S\Phi(-d_1).
 \]
 
-The Black–Scholes implementation provided the analytical benchmark against which the numerical and machine-learning approaches could be compared.
+Black–Scholes provided the principal analytical benchmark.
 
 Implementation:
 
 [`models/BlackScholes.py`](models/BlackScholes.py)
 
-### Monte Carlo
+---
 
-Under the risk-neutral measure, the terminal asset price can be simulated using
+## Monte Carlo
+
+Under the risk-neutral measure,
+
+\[
+dS_t=rS_tdt+\sigma S_tdW_t^{\mathbb Q}.
+\]
+
+Therefore,
 
 \[
 S_T=S_0\exp\left[
-\left(r-\frac{1}{2}\sigma^2\right)T
-+\sigma\sqrt{T}Z
+\left(r-\frac12\sigma^2\right)T+\sigma\sqrt{T}Z
 \right],
 \qquad Z\sim N(0,1).
 \]
 
-For a payoff \(\Phi(S_T)\), Monte Carlo estimates the option value using
+The option price can then be estimated using
 
 \[
-\widehat V_N=
-\frac{e^{-rT}}{N}
+\widehat V_N=\frac{e^{-rT}}{N}
 \sum_{i=1}^{N}\Phi(S_T^{(i)}).
 \]
 
-This provides a numerical approximation to the same risk-neutral expectation represented analytically by Black–Scholes.
+Monte Carlo therefore provides a numerical approximation to the same risk-neutral expectation represented analytically by Black–Scholes.
 
 Implementation:
 
 [`models/MonteCarlo.py`](models/MonteCarlo.py)
 
-### Antithetic Variates
+---
 
-We also investigated **Antithetic Variates** as a variance-reduction technique for Monte Carlo simulation.
+## Antithetic Variates
 
-Instead of using only a simulated draw \(Z\), the method pairs it with \(-Z\). Because the two draws are negatively correlated, averaging the corresponding payoffs can reduce the variance of the estimator without requiring the same proportional increase in independent simulations.
+We also implemented **Antithetic Variates** as a variance-reduction technique for Monte Carlo.
 
-This provided an additional comparison between straightforward Monte Carlo and a variance-reduced numerical approach.
+For each simulated standard-normal draw \(Z\), the corresponding antithetic draw \(-Z\) is also used. The two paths are negatively correlated, so averaging their payoffs can reduce estimator variance.
+
+This allowed us to compare ordinary Monte Carlo with a variance-reduced simulation approach.
 
 ---
 
-## Put–Call Parity and validation
+## Put–Call Parity
 
-The project also included validation against fundamental no-arbitrage relationships.
-
-For European calls and puts with the same underlying, strike, maturity, and interest rate, Put–Call Parity gives
+For European calls and puts with the same underlying, strike, maturity and interest rate,
 
 \[
 C-P=S-Ke^{-rT}.
 \]
 
-We used this relationship as a consistency check across the pricing framework.
-
-More generally, the project was concerned not only with numerical prediction error but also with whether the resulting prices were consistent with the mathematical and financial structure expected of European option prices.
+Put–Call Parity was used as a no-arbitrage consistency check across the pricing framework.
 
 ---
 
-## Evaluation
+# Evaluation
 
-The machine-learning models were benchmarked on unseen data using standard regression metrics.
+The models were evaluated using three main regression metrics.
 
-### Root Mean Squared Error
+### Mean Absolute Error — MAE
 
 \[
-RMSE=\sqrt{\frac{1}{n}\sum_{i=1}^{n}(y_i-\widehat y_i)^2}.
+MAE=\frac1n\sum_{i=1}^{n}|y_i-\widehat y_i|.
 \]
 
-RMSE places greater weight on larger prediction errors.
+MAE represents the average absolute difference between the true option price and the model prediction, measured in price units.
 
-### Mean Absolute Error
+### Root Mean Squared Error — RMSE
 
 \[
-MAE=\frac{1}{n}\sum_{i=1}^{n}|y_i-\widehat y_i|.
+RMSE=\sqrt{\frac1n\sum_{i=1}^{n}(y_i-\widehat y_i)^2}.
 \]
 
-MAE gives the average absolute difference between the predicted and observed prices.
+RMSE penalises larger errors more strongly than MAE.
 
-### Coefficient of determination
+### \(R^2\) score
 
 \[
-R^2=1-
-\frac{\sum_i(y_i-\widehat y_i)^2}
+R^2=1-\frac{\sum_i(y_i-\widehat y_i)^2}
 {\sum_i(y_i-\bar y)^2}.
 \]
 
-Together, these metrics provided a quantitative basis for comparing the different ML approaches and assessing their out-of-sample performance.
+\(R^2\) measures the proportion of variation in the target explained by the model relative to a constant-mean benchmark. It should not be interpreted literally as the percentage of market behaviour that a model "understands".
 
 Implementation:
 
@@ -311,59 +410,121 @@ Implementation:
 
 ---
 
-## Why compare synthetic and real data?
+# Results and interpretation
 
-The distinction between the two datasets is central to the project.
+The central comparison was between models trained using synthetic Black–Scholes-derived labels and models trained using actual market option prices.
 
-With synthetic Black–Scholes data, the target relationship is known and generated from a controlled mathematical model. If an ML model performs poorly here, this gives us information about its ability to approximate a relatively well-defined function.
+### Synthetic training data
 
-With real option-chain data, the problem becomes more realistic. Market prices can depart from the assumptions of the Black–Scholes model, and the relationship between the observed market parameters and prices contains effects that are not captured by a simple theoretical pricing formula.
+A model trained on Black–Scholes-generated labels is effectively learning to reproduce the Black–Scholes pricing function. This can produce very strong approximation performance, but it also means that the ML model inherits the assumptions embedded in the synthetic data.
 
-This means the two experiments answer different questions:
+In other words:
 
-| Dataset | Main question |
-|---|---|
-| **Synthetic** | Can the ML model approximate a known theoretical pricing function? |
-| **Real market data** | How well does the model generalise to observed option prices? |
+> If the training labels are produced by Black–Scholes, the machine-learning model is learning a sophisticated approximation to a Black–Scholes calculator.
 
-This comparison was particularly useful for separating **function-approximation capability** from the effects of **model misspecification and real market structure**.
+This makes synthetic data useful for testing function approximation, but it does not demonstrate that ML has discovered information beyond the Black–Scholes model.
 
----
+### Real market training data
 
-## Mathematical foundation
+Training against actual market option prices allows the models to learn relationships present in the observed market data. This can capture effects that a constant-volatility Black–Scholes specification does not directly model.
 
-The project was grounded in the standard continuous-time model of asset prices.
+In our experiments, the real-data models generally produced **lower errors and higher \(R^2\)** than the corresponding synthetic-data models when evaluated on the real market test set.
 
-Under geometric Brownian motion,
-
-\[
-dS_t=\mu S_t\,dt+\sigma S_t\,dW_t.
-\]
-
-Under the risk-neutral measure,
-
-\[
-dS_t=rS_t\,dt+\sigma S_t\,dW_t^{\mathbb Q}.
-\]
-
-This leads to the risk-neutral valuation expression
-
-\[
-V_0=e^{-rT}\mathbb{E}^{\mathbb Q}[\Phi(S_T)].
-\]
-
-This expectation provides a useful way of viewing the whole comparison:
-
-- **Black–Scholes** evaluates the expectation analytically under the model assumptions.
-- **Monte Carlo** estimates the expectation numerically.
-- **Antithetic Variates** improve the Monte Carlo estimator through variance reduction.
-- **Machine learning** learns an approximation to the resulting relationship between the market parameters and the option price.
-
-The approaches are therefore connected through the same underlying pricing problem.
+This result should be interpreted carefully: the comparison is not simply "ML versus Black–Scholes". The models are being trained against different target-generating processes, so the result also reflects the difference between synthetic theoretical labels and noisy real market observations.
 
 ---
 
-## Repository structure
+## LSTM results
+
+The LSTM performed substantially worse than the tree-based models in the experiments.
+
+The main reason is the mismatch between the architecture and the structure of the available data. LSTMs are designed to exploit meaningful sequential information, whereas the option-chain observations used here do not form a clean, evenly spaced chronological sequence.
+
+There is therefore a useful methodological lesson from this result:
+
+> **A more sophisticated neural architecture is not automatically a better model if its inductive bias does not match the data.**
+
+The LSTM result should consequently not be interpreted as evidence that neural networks are intrinsically unsuitable for option pricing. A properly constructed time-series dataset or a feedforward architecture such as an MLP would represent a different experiment.
+
+---
+
+## Tree-based model comparison
+
+The **Random Forest, XGBoost and CatBoost** models produced broadly similar performance in the project, with the three tree-based approaches generally outperforming the LSTM.
+
+The comparison therefore also becomes a question of computational cost and implementation complexity rather than simply selecting the model with the smallest error.
+
+A useful qualitative ordering from the project was:
+
+```text
+Lower computational cost                         Higher computational cost
+
+XGBoost  →  Random Forest  →  CatBoost  →  LSTM
+```
+
+The exact cost depends on hyperparameters, hardware and implementation, so this ordering should be treated as an empirical project-level observation rather than a universal property of the algorithms.
+
+---
+
+# Synthetic vs. real data: trade-offs
+
+## Synthetic data
+
+### Advantages
+
+- Controlled data-generating process.
+- Known theoretical pricing function.
+- Useful for testing whether a model can approximate Black–Scholes.
+- Large datasets can be generated without depending on market-data availability.
+- Makes it easier to isolate model approximation error.
+
+### Limitation
+
+The model can simply learn the assumptions of the Black–Scholes framework because those assumptions are embedded in the target labels.
+
+## Real option data
+
+### Advantages
+
+- Represents actual observed market prices.
+- Can contain patterns not captured by the basic Black–Scholes model.
+- Allows the ML models to learn from real market behaviour.
+- Does not have the same synthetic-label limitation.
+
+### Limitations
+
+- Market data contain noise.
+- Observations can be affected by liquidity and bid–ask spreads.
+- The available data are not a clean evenly spaced time series, limiting the usefulness of sequence-based architectures such as LSTM.
+- Market prices do not necessarily satisfy the assumptions required by the Black–Scholes model.
+
+---
+
+# Why this comparison matters
+
+The project is not simply asking which algorithm produces the lowest RMSE.
+
+It is asking how different representations of the same pricing problem behave:
+
+\[
+\boxed{
+\text{Analytical}\rightarrow\text{Numerical}\rightarrow\text{Data-driven}
+}
+\]
+
+**Black–Scholes** gives a mathematically elegant closed-form solution under restrictive assumptions.
+
+**Monte Carlo** relaxes the need for a closed-form solution by estimating the risk-neutral expectation numerically.
+
+**Antithetic Variates** improve the efficiency of that numerical estimation.
+
+**Machine learning** instead learns an approximation from examples, potentially allowing the model to capture relationships present in market data that are not explicitly represented in the Black–Scholes formula.
+
+This makes the comparison useful from both a quantitative-finance and machine-learning perspective.
+
+---
+
+# Repository structure
 
 ```text
 UCL-Summer-Research-Project-Year-2/
@@ -398,82 +559,65 @@ UCL-Summer-Research-Project-Year-2/
 └── README.md
 ```
 
-The repository also contains supporting model-training artefacts and generated datasets.
+**All code in this repository was implemented by me.** The repository is my implementation/codebase from the group research project; the group aspect refers to the research project itself and does not mean that the code here was jointly authored.
 
 ---
 
-## Project workflow
+# Reproducibility / implementation note
 
-The overall experimental workflow was:
+The project was developed as a research codebase rather than a packaged Python library. Some scripts may contain local development paths or assumptions about the available datasets, so paths may need to be adjusted when reproducing the experiments on another machine.
 
-```text
-1. Establish the theoretical pricing framework
-                ↓
-2. Implement Black–Scholes pricing
-                ↓
-3. Implement Monte Carlo simulation
-                ↓
-4. Investigate Antithetic Variates
-                ↓
-5. Validate pricing relationships such as Put–Call Parity
-                ↓
-6. Prepare synthetic and real option datasets
-                ↓
-7. Stratify data across ticker and maturity
-                ↓
-8. Train Random Forest / XGBoost / CatBoost / LSTM
-                ↓
-9. Evaluate on unseen data
-                ↓
-10. Compare analytical, numerical and ML approaches
-```
+The main Python ecosystem used includes tools such as:
+
+- Python
+- NumPy
+- pandas
+- SciPy
+- scikit-learn
+- XGBoost
+- CatBoost
+- TensorFlow / Keras
+- `yfinance`
 
 ---
 
-## Key takeaways
+# References and further reading
 
-The project gave me the opportunity to work across several areas that are closely connected in quantitative finance:
+The following references informed the mathematical, machine-learning and option-pricing aspects of the project. They are included as **research references**, not as claims that the referenced implementations were copied into this repository.
 
-- **Quantitative Finance** — European derivatives and option pricing
-- **Stochastic Calculus** — Brownian motion, geometric Brownian motion and risk-neutral dynamics
-- **Mathematical Finance** — Black–Scholes and no-arbitrage relationships
-- **Numerical Methods** — Monte Carlo simulation and variance reduction
-- **Machine Learning** — supervised learning for nonlinear function approximation
-- **Python** — data processing, modelling and evaluation
-- **Statistical Modelling** — out-of-sample model comparison
-- **Data Analysis** — working with synthetic and real U.S. equity option data
+1. **Neural networks for option pricing** — discussion of neural-network approaches to financial pricing and replication of Monte Carlo calculations.  
+   urlarXiv — Neural Network / Option Pricing referencehttps://arxiv.org/html/2510.01446v1#S5
 
-More importantly, the project helped me understand the relationship between a mathematically derived pricing model and a machine-learning approximation of the same problem. My main focus was on building and evaluating that ML approximation while keeping the underlying financial and mathematical structure in view.
+2. **Stanford CS230 project report** — neural-network approaches and model architecture considerations.  
+   urlStanford CS230 project reporthttps://cs230.stanford.edu/projects_fall_2019/reports/26260984.pdf
 
----
+3. **Machine learning for option pricing** — research on ML approaches to option pricing.  
+   urlarXiv — Option Pricing / Machine Learninghttps://arxiv.org/pdf/2307.07657
 
-## Future directions
+4. **Applied machine learning research** — reference used during the wider literature review.  
+   urlScienceDirect articlehttps://www.sciencedirect.com/science/article/pii/S0957417420306187
 
-There are several directions I would be interested in exploring further:
+5. **Option Pricing via Machine Learning** — practical quantitative-finance treatment of machine-learning approaches to option pricing.  
+   urlTidy Finance — Option Pricing via Machine Learninghttps://www.tidy-finance.org/r/option-pricing-via-machine-learning.html
 
-- comparing performance across different moneyness and maturity regimes;
-- analysing model errors by ticker and maturity rather than only aggregate metrics;
-- investigating implied volatility as the prediction target rather than option price;
-- incorporating additional market variables into the learning problem;
-- testing alternative volatility and pricing models;
-- evaluating computational cost alongside predictive accuracy; and
-- investigating whether the learned pricing surfaces preserve additional no-arbitrage constraints.
+6. **Option pricing machine-learning repository** — used as a reference point during the project.  
+   urlSaeed Bidi — option_pricinghttps://github.com/saeedbidi/option_pricing
 
 ---
 
-## Project status
+# Project status
 
-**Completed — UCL Year 2 Summer Research Programme group project.**
+**Completed — UCL Year 2 Summer Research Programme.**
 
-My primary contribution was the **machine-learning component**, while the project as a whole covered analytical pricing, numerical simulation, validation, and machine-learning approaches to European option pricing.
+### Group project
 
----
+**A Comparative Analysis of Methods for Option Pricing**
 
-## Author / Project Team
+### My primary contribution
 
-This was a **group research project** completed as part of the UCL Year 2 Summer Research Programme.
+**Machine Learning / Computational Modelling**
 
-**Inika Prakash**  
-Primary contribution: Machine Learning / Computational Modelling
+This included the implementation of the ML pipeline, model development, data preparation, training, prediction and evaluation contained in this repository.
 
+**Author: Inika Prakash**  
 UCL — Year 2 Summer Research Programme
